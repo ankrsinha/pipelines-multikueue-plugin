@@ -1,0 +1,50 @@
+package common
+
+import (
+	"fmt"
+	"os"
+)
+
+const (
+	// ClusterProxyURLEnv is the environment variable for cluster proxy URL
+	ClusterProxyURLEnv = "CLUSTER_PROXY_URL"
+	// KueueNamespaceEnv is the environment variable for kueue installed namespace
+	KueueNamespaceEnv = "KUEUE_NAMESPACE"
+	// ClusterProxyImpersonationEnv is the environment variable for enabling cluster proxy impersonation
+	ClusterProxyImpersonationEnv = "CLUSTER_PROXY_IMPERSONATION_ENABLED"
+	// EnableClusterProfileEnv is the environment variable for enabling ClusterProfile mode
+	EnableClusterProfileEnv = "ENABLE_CLUSTERPROFILE"
+)
+
+var (
+	// MultiKueueResourceName is the name used for MultiKueue-related secrets
+	MultiKueueResourceName = "multikueue"
+
+	// KueueNamespace is the namespace where Kueue components are deployed
+	KueueNamespace = getKueueNamespace()
+
+	// AdmissionCheckControllerName is the name of the admission check controller
+	AdmissionCheckControllerName = "open-cluster-management.io/placement"
+)
+
+func getKueueNamespace() string {
+	ns := os.Getenv(KueueNamespaceEnv)
+	if ns == "" {
+		return "openshift-kueue-operator"
+	}
+	return ns
+}
+
+// Get MultiKueue Kubeconfig Secret name
+func GetMultiKueueSecretName(clusterName string) string {
+	return fmt.Sprintf("%s-%s", MultiKueueResourceName, clusterName)
+}
+
+func IsImpersonationMode() bool {
+	return os.Getenv(ClusterProxyImpersonationEnv) == "true"
+}
+
+// IsClusterProfileEnabled returns true if ClusterProfile mode is enabled
+func IsClusterProfileEnabled() bool {
+	return os.Getenv(EnableClusterProfileEnv) == "true"
+}

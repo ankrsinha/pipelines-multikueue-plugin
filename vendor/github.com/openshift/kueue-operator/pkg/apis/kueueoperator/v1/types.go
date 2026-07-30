@@ -1,0 +1,613 @@
+package v1
+
+import (
+	operatorv1 "github.com/openshift/api/operator/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+)
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// Kueue is the CRD to represent the Kueue operator.
+// +kubebuilder:object:root=true
+// +kubebuilder:resource:path=kueues,scope=Cluster
+// +k8s:openapi-gen=true
+// +genclient
+// +genclient:nonNamespaced
+// +kubebuilder:storageversion
+// +kubebuilder:subresource:status
+// +kubebuilder:validation:XValidation:rule="self.metadata.name == 'cluster'",message="Kueue is a singleton, .metadata.name must be 'cluster'"
+type Kueue struct {
+	metav1.TypeMeta `json:",inline"`
+	// metadata for Kueue.
+	// +optional
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	// spec holds user settable values for configuration
+	// +required
+	Spec KueueOperandSpec `json:"spec,omitzero"`
+	// status holds observed values from the cluster.
+	// They may not be overridden.
+	// +optional
+	Status KueueStatus `json:"status,omitzero,omitempty"`
+}
+
+type KueueOperandSpec struct {
+	operatorv1.OperatorSpec `json:",inline"`
+	// config is the desired configuration
+	// for the Kueue operator.
+	// +required
+	Config KueueConfiguration `json:"config,omitzero"`
+}
+
+type KueueConfiguration struct {
+	// integrations is a required field that configures the Kueue's workload integrations.
+	// Kueue has both standard integrations, known as job frameworks, and external integrations
+	// known as external frameworks.
+	// Kueue will only manage workloads that correspond to the specified integrations.
+	// +required
+	Integrations Integrations `json:"integrations,omitzero"`
+	// workloadManagement controls how Kueue manages workloads.
+	// By default Kueue will manage workloads that have a queue-name label.
+	// Workloads that are missing the queue-name will be ignored by Kueue.
+	// If workloadManagement is not specified, the operator will decide the
+	// default.
+	// This default could change over time.
+	// This field is optional.
+	// +optional
+	WorkloadManagement WorkloadManagement `json:"workloadManagement"`
+	// gangScheduling controls how Kueue admits workloads.
+	// Gang Scheduling is the act of all or nothing scheduling,
+	// where workloads do not become ready within a certain period, they may be evicted and later retried.
+	// This field is optional.
+	// If gangScheduling is not specified, the operator will decide the default.
+	// This default could change over time.
+	// +optional
+	GangScheduling GangScheduling `json:"gangScheduling"`
+	// preemption is the process of evicting one or more admitted Workloads to accommodate another Workload.
+	// Kueue has classical premption and preemption via fair sharing.
+	// preemption is optional.
+	// If preemption is not specified, the operator will decide the default.
+	// This default could change over time.
+	// +optional
+	Preemption Preemption `json:"preemption"`
+	// resources provides additional configuration options for how Kueue handles resources.
+	// When resources.deviceClassMappings is configured, Kueue can track and
+	// enforce quotas for DRA devices in ClusterQueues.
+	// resources is optional.
+	// +optional
+	Resources Resources `json:"resources,omitzero"`
+	// multiKueue controls the behaviour of the MultiKueue AdmissionCheck Controller.
+	// MultiKueue enables multi-cluster workload distribution.
+	// This field is optional.
+	// If multiKueue is not specified, MultiKueue is disabled.
+	// +optional
+	MultiKueue *MultiKueue `json:"multiKueue,omitempty"`
+
+	// admissionFairSharing enables fair sharing at admission time.
+	// It makes Kueue order pending workloads by each LocalQueue's accumulated resource usage,
+	// so that queues which have consumed fewer resources are admitted first.
+	// This section configures the usage decay rate, the sampling frequency, and per-resource weights.
+	// +optional
+	AdmissionFairSharing AdmissionFairSharing `json:"admissionFairSharing,omitzero"`
+}
+
+// KueueStatus defines the observed state of Kueue
+type KueueStatus struct {
+	operatorv1.OperatorStatus `json:",inline"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// KueueList contains a list of Kueue
+type KueueList struct {
+	metav1.TypeMeta `json:",inline"`
+	// metadata for the list
+	// +optional
+	metav1.ListMeta `json:"metadata,omitempty"`
+	// items is a slice of Kueue
+	// this is a cluster scoped resource and there can only be 1 Kueue
+	// +kubebuilder:validation:MaxItems=1
+	// +required
+	Items []Kueue `json:"items"`
+}
+
+// +kubebuilder:validation:Enum=BatchJob;RayJob;RayCluster;RayService;JobSet;MPIJob;PaddleJob;PyTorchJob;TFJob;TrainJob;XGBoostJob;JaxJob;AppWrapper;Pod;Deployment;StatefulSet;LeaderWorkerSet;SparkApplication
+type KueueIntegration string
+
+const (
+	KueueIntegrationBatchJob         KueueIntegration = "BatchJob"
+	KueueIntegrationRayJob           KueueIntegration = "RayJob"
+	KueueIntegrationRayCluster       KueueIntegration = "RayCluster"
+	KueueIntegrationRayService       KueueIntegration = "RayService"
+	KueueIntegrationJobSet           KueueIntegration = "JobSet"
+	KueueIntegrationMPIJob           KueueIntegration = "MPIJob"
+	KueueIntegrationPaddleJob        KueueIntegration = "PaddleJob"
+	KueueIntegrationPyTorchJob       KueueIntegration = "PyTorchJob"
+	KueueIntegrationTFJob            KueueIntegration = "TFJob"
+	KueueIntegrationTrainJob         KueueIntegration = "TrainJob"
+	KueueIntegrationXGBoostJob       KueueIntegration = "XGBoostJob"
+	KueueIntegrationJaxJob           KueueIntegration = "JaxJob"
+	KueueIntegrationAppWrapper       KueueIntegration = "AppWrapper"
+	KueueIntegrationPod              KueueIntegration = "Pod"
+	KueueIntegrationDeployment       KueueIntegration = "Deployment"
+	KueueIntegrationStatefulSet      KueueIntegration = "StatefulSet"
+	KueueIntegrationLeaderWorkerSet  KueueIntegration = "LeaderWorkerSet"
+	KueueIntegrationSparkApplication KueueIntegration = "SparkApplication"
+)
+
+// +kubebuilder:validation:Enum=Default;Custom
+type AdmissionFairSharingConfiguration string
+
+const (
+	AdmissionFairSharingConfigurationDefault AdmissionFairSharingConfiguration = "Default"
+	AdmissionFairSharingConfigurationCustom  AdmissionFairSharingConfiguration = "Custom"
+)
+
+// AdmissionFairSharing provides configuration of intervals
+// and resource weights for Admission Fair Sharing.
+// +kubebuilder:validation:XValidation:rule="has(self.configuration) && self.configuration == 'Custom' ? has(self.custom) : !has(self.custom)",message="custom is required when configuration is Custom, and forbidden otherwise"
+// +union
+type AdmissionFairSharing struct {
+	// configuration determines if admission fair sharing uses default or custom settings.
+	// The allowed values are Default and Custom.
+	// Default means admission fair sharing is enabled with default values,
+	// which are subject to change over time. The default for usage half life time set by the operator is 30 minutes,
+	// while kueue sets the default for usage sampling interval to 5 minutes and the default for resource weights to 1 for any resource.
+	// Custom means admission fair sharing is enabled with user-provided configuration
+	// in the custom field.
+	// +required
+	// +unionDiscriminator
+	Configuration AdmissionFairSharingConfiguration `json:"configuration,omitempty"`
+	// custom provides customized configuration for admission fair sharing.
+	// custom is required when configuration is Custom, and forbidden otherwise.
+	// +optional
+	Custom AdmissionFairSharingCustom `json:"custom,omitzero"`
+}
+
+type AdmissionFairSharingCustom struct {
+	// usageHalfLifeTimeSeconds indicates the time in seconds after which the current usage will decrease by a half.
+	// The value must be between 1 and 31536000 (one year in seconds).
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=31536000
+	// +required
+	UsageHalfLifeTimeSeconds int32 `json:"usageHalfLifeTimeSeconds,omitempty"`
+
+	// usageSamplingIntervalSeconds is the frequency in seconds that Kueue updates consumedResources in FairSharingStatus.
+	// When omitted, kueue will decide the default, which is subject to change over time.
+	// The current default is 300 (5 minutes).
+	// The value must be between 1 and 3600 (one hour in seconds).
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=3600
+	// +optional
+	UsageSamplingIntervalSeconds int32 `json:"usageSamplingIntervalSeconds,omitempty"`
+
+	// resourceWeights assigns weights to resources which are then used to calculate LocalQueue's
+	// resource usage and order Workloads.
+	// When omitted, kueue will decide the default, which is subject to change over time.
+	// The current default weight is 1 for any resource.
+	// When specified, the list must contain between 1 and 16 items.
+	// Each entry must have a unique resource name.
+	// +listType=map
+	// +listMapKey=name
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=16
+	// +optional
+	ResourceWeights []ResourceWeight `json:"resourceWeights,omitempty"`
+}
+
+// ResourceWeight associates a resource name with a weight used for fair sharing calculations.
+type ResourceWeight struct {
+	// name consists of an optional DNS subdomain prefix (lowercase alphanumeric, hyphens, dots,
+	// up to 253 characters), followed by a slash '/', and a name segment.
+	// The name segment must be at most 63 characters, consisting of alphanumeric characters (upper or lower case),
+	// with '-', '_', and '.' allowed anywhere except the first or last character.
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=317
+	// +kubebuilder:validation:XValidation:rule="!format.qualifiedName().validate(self).hasValue()",message="must be a qualified name (e.g., 'nvidia.com/gpu' or 'cpu')"
+	// +required
+	Name string `json:"name,omitempty"`
+
+	// weight is a string representation of a non-negative float64 value
+	// used as a weight for a resource in fair sharing calculations (e.g., "1.0", "0.5", ".5", "+0.5", "1e-3").
+	// The weight must be at most 32 characters.
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=32
+	// +kubebuilder:validation:XValidation:rule="self.matches(r'^[+]?([0-9]*\\.?[0-9]+)([eE][+-]?[0-9]+)?$')",message="must be a non-negative number (e.g., '1.0', '0.5', '.5', '+0.5', '1e-3')"
+	// +required
+	Weight string `json:"weight,omitempty"`
+}
+
+// This is the GVR for an external framework.
+// Controller runtime requires this in this format
+// for api discoverability.
+type ExternalFramework struct {
+	// group is the API group of the externalFramework.
+	// Must be a valid DNS 1123 subdomain consisting of of lower-case alphanumeric characters,
+	// hyphens and periods, of at most 253 characters in length.
+	// Each period separated segment within the subdomain must start and end with an alphanumeric character.
+	// +group uses matches and not cel functions to allow for use on 4.17.
+	// +kubebuilder:validation:MaxLength=253
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:XValidation:rule="self.matches(r'^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$')"
+	// +required
+	Group string `json:"group,omitempty"`
+	// resource is the Resource type of the external framework.
+	// Resource types are lowercase and plural (e.g. pods, deployments).
+	// Must be a valid DNS 1123 label consisting of a lower-case alphanumeric string
+	// and hyphens of at most 63 characters in length.
+	// The value must start and end with an alphanumeric character.
+	// +resource uses matches and not cel functions to allow for use on 4.17.
+	// +kubebuilder:validation:MaxLength=63
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:XValidation:rule="self.matches(r'^[a-z0-9]([-a-z0-9]*[a-z0-9])?$')"
+	// +required
+	Resource string `json:"resource,omitempty"`
+	// version is the version of the api (e.g. v1alpha1, v1beta1, v1).
+	// Must be a valid DNS 1035 label consisting of a lower-case alphanumeric string
+	// and hyphens of at most 63 characters in length.
+	// The value must start with an alphabetic character and end with an alphanumeric character.
+	// +version uses matches and not cel functions to allow for use on 4.17.
+	// +kubebuilder:validation:MaxLength=63
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:XValidation:rule="self.matches(r'^[a-z0-9]([-a-z0-9]*[a-z0-9])?$')"
+	// +required
+	Version string `json:"version,omitempty"`
+}
+
+// This is the integrations for Kueue.
+// Kueue uses these apis to determine
+// which jobs will be managed by Kueue.
+type Integrations struct {
+	// frameworks are a list of frameworks that Kueue has support for.
+	// The allowed values are BatchJob, RayJob, RayCluster, RayService, JobSet, MPIJob, PaddleJob, PyTorchJob, TFJob, TrainJob, XGBoostJob, AppWrapper, Pod, Deployment, StatefulSet, LeaderWorkerSet and SparkApplication.
+	// frameworks are required and must have at least one element.
+	// frameworks can not have more than 18 elements.
+	// Each framework represents a type of job that Kueue will manage.
+	// +kubebuilder:validation:MaxItems=18
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:XValidation:rule="self.all(x, self.exists_one(y, x == y))",message="each item in frameworks must be unique"
+	// +listType=set
+	// +required
+	Frameworks []KueueIntegration `json:"frameworks,omitempty"`
+	// externalFrameworks are a list of GroupVersionResources
+	// that are managed for Kueue by external controllers.
+	// externalFrameworks are optional and should only be used if you have an external controller
+	// that integrates with Kueue.
+	// externalFrameworks, if specified, can not have more than 32 items.
+	// +listType=map
+	// +listMapKey=group
+	// +kubebuilder:validation:MaxItems=32
+	// +optional
+	ExternalFrameworks []ExternalFramework `json:"externalFrameworks,omitempty"`
+	// labelKeysToCopy are a list of label keys that are copied once a workload is created.
+	// These keys are persisted to the internal Kueue workload object.
+	// If not specified, only the Kueue labels will be copied.
+	// labelKeysToCopy, if specified, is limited to a maximum of 64 items.
+	// +kubebuilder:validation:MaxItems=64
+	// +listType=map
+	// +listMapKey=key
+	// +optional
+	LabelKeysToCopy []LabelKeys `json:"labelKeysToCopy,omitempty"`
+}
+
+type LabelKeys struct {
+	// key is the label key.
+	// A label key must be a valid qualified name consisting of a lower-case alphanumeric string,
+	// and hyphens of at most 63 characters in length.
+	// To support older openshift versions, matches is used instead of CEL validation.
+	// The name must start and end with an alphanumeric character.
+	// The name may be optionally prefixed with a subdomain consisting of lower-case alphanumeric characters,
+	// hyphens and periods, of at most 253 characters in length.
+	// Each period separated segment within the subdomain must start and end with an alphanumeric character.
+	// The optional prefix and the name are separate by a forward slash (/).
+	// +key uses matches and not cel functions to allow for use on 4.17.
+	// +kubebuilder:validation:MaxLength=317
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:XValidation:rule="self.matches(r'^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?([a-z0-9]([-a-z0-9]*[a-z0-9])?)$')"
+	// +required
+	Key string `json:"key,omitempty"`
+}
+
+// +kubebuilder:validation:Enum=ByWorkload;None;""
+type GangSchedulingPolicy string
+
+const (
+	GangSchedulingPolicyByWorkload GangSchedulingPolicy = "ByWorkload"
+	GangSchedulingPolicyNone       GangSchedulingPolicy = "None"
+)
+
+// +kubebuilder:validation:Enum="";Parallel;Sequential
+type GangSchedulingWorkloadAdmission string
+
+const (
+	GangSchedulingWorkloadAdmissionSequential GangSchedulingWorkloadAdmission = "Sequential"
+	GangSchedulingWorkloadAdmissionParallel   GangSchedulingWorkloadAdmission = "Parallel"
+)
+
+// Kueue provides the ability to admit workloads all in one (gang admission)
+// and evicts workloads if they are not ready within a specific time.
+// +kubebuilder:validation:XValidation:rule="has(self.policy) && self.policy == 'ByWorkload' ?  has(self.byWorkload) : !has(self.byWorkload)",message="byWorkload is required when policy is byWorkload, and forbidden otherwise"
+// +union
+type GangScheduling struct {
+	// policy allows you to enable and configure gang scheduling.
+	// The allowed values are ByWorkload, None and "".
+	// When set to ByWorkload, this means each workload is processed and considered
+	// for admission as a single unit.
+	// Where workloads do not become ready over time, the entire workload may then be evicted and retried at a later time.
+	// None means gang scheduling is disabled.
+	// When set to "", this means no opinion and the operator is left
+	// to choose a reasonable default, which is subject to change over time.
+	// The current default is None.
+	// policy is a required field.
+	// +required
+	// +unionDiscriminator
+	Policy GangSchedulingPolicy `json:"policy"`
+	// byWorkload configures how Kueue will process workloads for admission.
+	// byWorkload is required when policy is ByWorkload, and forbidden otherwise.
+	// +optional
+	ByWorkload *ByWorkload `json:"byWorkload,omitempty"`
+}
+
+// ByWorkload controls how admission is done
+type ByWorkload struct {
+	// admission controls how Kueue will process workloads.
+	// admission is required.
+	// Allowed values are Sequential, Parallel and "".
+	// When admission is set to Sequential, only pods from the currently processing workload will be admitted.
+	// Once all pods from the current workload are admitted, and ready, Kueue will process the next workload.
+	// Sequential processing may slow down admission when the cluster has sufficient capacity for multiple workloads,
+	// but provides a higher guarantee of workloads scheduling all pods together successfully.
+	// When set to Parallel, pods from any workload will be admitted at any time.
+	// This may lead to a deadlock where workloads are in contention for cluster capacity and
+	// pods from another workload having successfully scheduled prevent pods from the current workload scheduling.
+	// When set to "", this means no opinion and the operator is left
+	// to choose a reasonable default, which is subject to change over time.
+	// The current default is Parallel.
+	// +required
+	Admission GangSchedulingWorkloadAdmission `json:"admission"`
+}
+
+// +kubebuilder:validation:Enum="";QueueName;None
+type LabelPolicy string
+
+const (
+	LabelPolicyQueueName LabelPolicy = "QueueName"
+	LabelPolicyNone      LabelPolicy = "None"
+)
+
+type WorkloadManagement struct {
+	// labelPolicy controls whether or not Kueue reconciles
+	// jobs that don't set the label kueue.x-k8s.io/queue-name.
+	// labelPolicy is a required field.
+	// The allowed values are QueueName, None and "".
+	// None means that workloads will be suspended on
+	// creation and a label will be added via a mutating webhook.
+	// This will be applied for all integrations that Kueue manages.
+	// QueueName means that workloads that are managed
+	// by Kueue must have a label kueue.x-k8s.io/queue-name.
+	// If this label is not present on the workload, then Kueue will
+	// ignore this workload.
+	// When set to "", this means no opinion and the operator is left
+	// to choose a reasonable default, which is subject to change over time.
+	// The current default is QueueName.
+	// +required
+	LabelPolicy LabelPolicy `json:"labelPolicy"`
+}
+
+// +kubebuilder:validation:Enum="";Classical;FairSharing
+type PreemptionPolicy string
+
+const (
+	PreemptionStrategyClassical   PreemptionPolicy = "Classical"
+	PreemptionStrategyFairsharing PreemptionPolicy = "FairSharing"
+)
+
+type Preemption struct {
+	// preemptionPolicy are the types of preemption Kueue allows.
+	// preemptionPolicy is an optional field.
+	// The allowed values are Classical, FairSharing and "".
+	// Classical means that an incoming workload, which does
+	// not fit within the unusued quota, is eligible to issue preemptions
+	// when the requests of the workload are below the
+	// resource flavor's nominal quota or borrowWithinCohort is enabled
+	// on the Cluster Queue.
+	// FairSharing means that ClusterQueues with pending Workloads can preempt other Workloads
+	// in their cohort until the preempting ClusterQueue
+	// obtains an equal or weighted share of the borrowable resources.
+	// The borrowable resources are the unused nominal quota
+	// of all the ClusterQueues in the cohort.
+	// FairSharing is a more heavy weight algorithm.
+	// When set to "", this means no opinion and the operator is left
+	// to choose a reasonable default, which is subject to change over time.
+	// The current default is Classical.
+	// +required
+	PreemptionPolicy PreemptionPolicy `json:"preemptionPolicy"`
+}
+
+// Resources provides additional configuration options for handling resources in Kueue.
+// +kubebuilder:validation:MinProperties=1
+type Resources struct {
+	// deviceClassMappings defines mappings from Kubernetes DeviceClass names
+	// to Kueue resource names for DRA quota tracking in ClusterQueues.
+	// Each DeviceClass name can only appear in one mapping.
+	// deviceClassMappings is limited to a maximum of 16 items.
+	// +listType=map
+	// +listMapKey=name
+	// +kubebuilder:validation:MaxItems=16
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:XValidation:rule="self.all(m1, m1.deviceClassNames.all(d, self.all(m2, m2 == m1 || !m2.deviceClassNames.exists(e, e == d))))",message="each DeviceClass name can only appear in one mapping"
+	// +optional
+	DeviceClassMappings []DeviceClassMapping `json:"deviceClassMappings,omitempty"`
+}
+
+// DeviceClassMapping maps Kubernetes DeviceClass names to a Kueue resource name.
+type DeviceClassMapping struct {
+	// name is the Kueue resource name used in ClusterQueue quotas
+	// (e.g., "nvidia.com/gpu").
+	// Must consist of at most 253 characters with an optional DNS subdomain
+	// prefix and a single forward slash. The prefix must consist only of
+	// lowercase alphanumeric characters, hyphens, and dots. The name segment
+	// after the slash may contain alphanumeric characters, hyphens, underscores,
+	// and dots. Each segment must start and end with an alphanumeric character.
+	// This matches upstream kueue's use of IsQualifiedName for this field.
+	// +kubebuilder:validation:MaxLength=253
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:XValidation:rule="!format.qualifiedName().validate(self).hasValue()",message="must be a qualified name consisting of alphanumeric characters, hyphens, underscores, dots, with an optional DNS subdomain prefix and forward slash (e.g., 'nvidia.com/gpu' or 'gpu')"
+	// +required
+	Name string `json:"name,omitempty"`
+
+	// deviceClassNames is the list of Kubernetes DeviceClass names
+	// (e.g., "gpu.nvidia.com") that map to the resource name above.
+	// Must consist of at most 253 characters with an optional DNS subdomain
+	// prefix and a single forward slash, or just a name on its own. The prefix
+	// must consist only of lowercase alphanumeric characters, hyphens, and dots.
+	// The name segment after the slash may contain alphanumeric characters,
+	// hyphens, underscores, and dots. Each segment must start and end with
+	// an alphanumeric character.
+	// This matches upstream kueue's use of IsQualifiedName for this field.
+	// +listType=set
+	// +kubebuilder:validation:MaxItems=8
+	// +kubebuilder:validation:MinItems=1
+	// +required
+	DeviceClassNames []DeviceClassName `json:"deviceClassNames,omitempty"`
+
+	// sources configures resource accounting sources for this mapping.
+	// Each source defines how quota is tracked for this DeviceClass.
+	// Currently only counter sources are supported (for partitionable devices).
+	// Extended resource requests that resolve to a DeviceClass with sources
+	// configured are marked inadmissible.
+	// The operator automatically enables the required kueue feature gate when
+	// sources are configured and the Kubernetes DRAPartitionableDevices
+	// feature gate is enabled on the cluster.
+	// +listType=map
+	// +listMapKey=type
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=1
+	// +optional
+	Sources []DeviceClassSourceConfig `json:"sources,omitempty"`
+}
+
+// DeviceClassSourceConfig defines a resource accounting source for a DeviceClassMapping.
+// Exactly one of the source types must be set.
+// +kubebuilder:validation:XValidation:rule="has(self.type) && self.type == 'Counter' ? has(self.counter) : !has(self.counter)",message="counter is required when type is Counter, and forbidden otherwise"
+// +union
+type DeviceClassSourceConfig struct {
+	// type selects the source type for resource accounting.
+	// Counter uses DRA ConsumesCounters data from ResourceSlices to compute quota charges.
+	// +unionDiscriminator
+	// +required
+	Type DeviceClassSourceType `json:"type,omitempty"`
+
+	// counter configures counter-based quota for partitionable devices.
+	// Maps a DRA driver counter to the parent DeviceClassMapping's Kueue quota resource.
+	// counter is required when type is Counter, and forbidden otherwise.
+	// +optional
+	Counter DeviceClassCounterSource `json:"counter,omitzero"`
+}
+
+// +kubebuilder:validation:Enum=Counter
+type DeviceClassSourceType string
+
+const (
+	DeviceClassSourceTypeCounter DeviceClassSourceType = "Counter"
+)
+
+// DeviceClassCounterSource identifies where to read counter data from and which counter to track.
+type DeviceClassCounterSource struct {
+	// name is the counter name within the device's consumesCounters
+	// entries to track for quota. Must match a counter name published by
+	// the driver in ResourceSlice devices' consumesCounters field.
+	// Counter set names are per-device identifiers (e.g., gpu-0-counter-set,
+	// gpu-1-counter-set), so name matches across all counter sets
+	// for a given driver without requiring one mapping per device.
+	// Must be a valid DNS label consisting of lowercase alphanumeric characters
+	// and hyphens, of at most 63 characters in length.
+	// Must start and end with an alphanumeric character.
+	// +kubebuilder:validation:MaxLength=63
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:XValidation:rule="!format.dns1123Label().validate(self).hasValue()",message="must be a valid DNS label consisting of lowercase alphanumeric characters and hyphens, of at most 63 characters in length, must start and end with an alphanumeric character (e.g., 'memory')"
+	// +required
+	Name string `json:"name,omitempty"`
+
+	// driver is the DRA driver name used to filter relevant ResourceSlices.
+	// Must match the spec.driver field on ResourceSlice objects.
+	// Must be a valid DNS subdomain consisting of lowercase alphanumeric characters,
+	// hyphens and periods, of at most 253 characters in length.
+	// Each period separated segment must start and end with an alphanumeric character.
+	// +kubebuilder:validation:MaxLength=253
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:XValidation:rule="!format.dns1123Subdomain().validate(self).hasValue()",message="must be a valid DNS subdomain consisting of lowercase alphanumeric characters, hyphens and periods, of at most 253 characters in length, each period separated segment must start and end with an alphanumeric character (e.g., 'gpu.nvidia.com')"
+	// +required
+	Driver string `json:"driver,omitempty"`
+
+	// deviceSelector scopes which devices are eligible for counter-based
+	// quota accounting. Typically matches a GPU model (e.g., productName)
+	// so all partition profiles on that model share one quota pool.
+	// Per-workload charging is determined by the workload's own
+	// ResourceClaimTemplate selector, which narrows to the requested profile.
+	// The selector is compiled at config load time using the upstream dracel
+	// compiler.
+	// +required
+	DeviceSelector DeviceSelector `json:"deviceSelector,omitzero"`
+}
+
+// DeviceSelector selects devices by attributes.
+// +kubebuilder:validation:XValidation:rule="has(self.type) && self.type == 'CEL' ? has(self.cel) : !has(self.cel)",message="cel is required when type is CEL, and forbidden otherwise"
+// +union
+type DeviceSelector struct {
+	// type selects the device selector type.
+	// CEL uses a CEL expression to filter devices by attributes.
+	// +unionDiscriminator
+	// +required
+	Type DeviceSelectorType `json:"type,omitempty"`
+
+	// cel contains a CEL expression for filtering devices.
+	// cel is required when type is CEL, and forbidden otherwise.
+	// +optional
+	CEL CELDeviceSelector `json:"cel,omitzero"`
+}
+
+// +kubebuilder:validation:Enum=CEL
+type DeviceSelectorType string
+
+const (
+	DeviceSelectorTypeCEL DeviceSelectorType = "CEL"
+)
+
+// CELDeviceSelector filters devices using a CEL expression.
+type CELDeviceSelector struct {
+	// expression is a CEL expression that evaluates against device attributes.
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=1024
+	// +required
+	Expression string `json:"expression,omitempty"`
+}
+
+// DeviceClassName is a Kubernetes DeviceClass name.
+// Must consist of at most 253 characters with an optional DNS subdomain
+// prefix and a single forward slash, or just a name on its own. The prefix
+// must consist only of lowercase alphanumeric characters, hyphens, and dots.
+// The name segment after the slash may contain alphanumeric characters,
+// hyphens, underscores, and dots. Each segment must start and end with
+// an alphanumeric character.
+// This matches upstream kueue's use of IsQualifiedName for this field.
+// +kubebuilder:validation:MaxLength=253
+// +kubebuilder:validation:MinLength=1
+// +kubebuilder:validation:XValidation:rule="!format.qualifiedName().validate(self).hasValue()",message="must be a qualified name consisting of alphanumeric characters, hyphens, underscores, dots, with an optional DNS subdomain prefix and forward slash (e.g., 'gpu.nvidia.com')"
+type DeviceClassName string
+
+// MultiKueue controls the behaviour of the MultiKueue AdmissionCheck Controller.
+type MultiKueue struct {
+	// externalFrameworks are a list of GroupVersionKinds that should be supported
+	// by the generic MultiKueue adapter. Each entry defines how to handle a specific
+	// GroupVersionKind (GVK) for MultiKueue operations.
+	// externalFrameworks are optional and should only be used if you have external frameworks
+	// that need MultiKueue support.
+	// externalFrameworks, if specified, must have at least one item and no more than 32 items.
+	// +listType=map
+	// +listMapKey=group
+	// +kubebuilder:validation:MaxItems=32
+	// +kubebuilder:validation:MinItems=1
+	// +optional
+	ExternalFrameworks []ExternalFramework `json:"externalFrameworks,omitempty"`
+}

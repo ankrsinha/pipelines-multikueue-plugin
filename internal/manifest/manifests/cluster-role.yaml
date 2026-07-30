@@ -1,0 +1,68 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: multikueue
+rules:
+  - apiGroups: [""]
+    resources:
+      - namespaces
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - update
+      - patch
+
+  - apiGroups:
+      - operators.coreos.com
+    resources:
+      - subscriptions
+      - operatorgroups
+      - clusterserviceversions
+      - installplans
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - update
+      - patch
+
+  - apiGroups:
+      - kueue.openshift.io
+    resources:
+      - kueues
+    verbs:
+      - get
+      - create
+      - update
+      - patch
+
+  - apiGroups:
+      - kueue.x-k8s.io
+    resources:
+      - "workloads"
+    verbs:
+      - "get"
+      - "watch"
+      - "list"
+      - "create"
+      - "delete"
+
+  - apiGroups:
+      - batch
+    resources:
+      - jobs
+    verbs:
+      - "watch"
+
+  - apiGroups:
+      - tekton.dev
+    resources:
+      - pipelineruns
+    verbs:
+      - watch
+      - get
+      - create
+      - delete
